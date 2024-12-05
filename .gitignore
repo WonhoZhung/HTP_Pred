@@ -1,3 +1,4 @@
 /MolCLR
 /predictions
 /__pycache__
+*.ipynb

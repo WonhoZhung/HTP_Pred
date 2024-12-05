@@ -49,8 +49,11 @@ if __name__ == "__main__":
     config = yaml.load(open(yaml_path, "r"), Loader=yaml.FullLoader)
     pprint.pprint(config)
 
+    st = time.time()
     df, grads = main(config)
+    et = time.time()
     print(df.drop(['index'], axis=1))
+    print(f"Prediction duration: {et - st:.2f} (s) for {len(df)} data.")
 
     os.makedirs('predictions', exist_ok=True)
     name = os.path.basename(config['dataset']['data_path']).split('.')[0]

@@ -10,7 +10,7 @@ You can access to the database and run the model prediction on the [HepatoToxici
 
 ### Installation
 
-Set up conda environment and clone MolCLR github repository
+Set up conda environment and clone MolCLR github repository.
 
 ```
 # create a new environment

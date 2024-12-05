@@ -1,16 +1,11 @@
 batch_size: 1                   # batch size
-epochs: 50                      # total number of epochs
-eval_every_n_epochs: 1          # validation frequency
 fine_tune_from: pretrained_gin   # sub directory of pre-trained model in ./ckpt
 log_every_n_steps: 50           # print training log frequency
 fp16_precision: False           # float precision 16 (i.e. True/False)
-init_lr: 0.0005                 # initial learning rate for the prediction head
-init_base_lr: 0.0001            # initial learning rate for the base GNN encoder
-weight_decay: 1e-6              # weight decay of Adam
 gpu: cuda:0                     # training GPU
 model_path: ./finetune/checkpoints/model.pth                    # path to model pth
-grad: True                      # return gradient (dy/dX)
-visualize: True                # save images with gradient visualization
+grad: False                      # return gradient (dy/dX)
+visualize: False                # save images with gradient visualization
 
 model_type: gin                 # GNN backbone (i.e., gin/gcn)
 model: 
