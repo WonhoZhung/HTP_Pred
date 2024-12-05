@@ -1,8 +1,8 @@
 ## HTP_Pred ##
 
-This is the official implementation of HTP_Pred, a deep learning model for predicting hepatotoxicity trained on HTP_KB database.
+This is the official implementation of HTP_Pred, a deep learning model for predicting hepatotoxicity, trained on HTP_KB database.
 
-<img src="src/overview_htp.png" width="450">
+<img src="src/overview_htp.png" width="600">
 
 You can access to the database and run the model prediction on the [HepatoToxicity Portal (HTP)](https://kobic.re.kr/htp/).
 
@@ -38,4 +38,17 @@ $ python pred_htp.py predict.yaml
 
 ### Visualizing atomwise contribution
 
+Change `grad` variable to `True` to calculate atom contribution.
+This will save scaled gradient values as pickle file.
+
+Change `visualize` variable to `True` to visualize atom contribution.
+This will make images of molecules.
+
+
+## Citation
+
+If you find our work useful in your research, please cite:
+
+```
 TBD
+```

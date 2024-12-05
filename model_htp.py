@@ -12,6 +12,9 @@ import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score, mean_squared_error, mean_absolute_error
 from sklearn.model_selection import StratifiedKFold
 
+from MolCLR.models.ginet_finetune import num_atom_type, num_chirality_tag
+
+EPS = 1e-12
 
 def _save_config_file(model_checkpoints_folder):
     if not os.path.exists(model_checkpoints_folder):
@@ -203,36 +206,65 @@ class HTPFineTune(object):
 
         # test steps
         predictions, grads = [], []
-        num_data = 0
-        for bn, data in enumerate(test_loader):
+        for _, data in enumerate(test_loader):
             model.eval()
-            with torch.no_grad():
+            if return_grad:   
                 data = data.to(self.device)
-                __, pred = model(data)
-
-                num_data += data.y.size(0)
-
+                x, pred = self.run_model(model, data)
                 pred = F.softmax(pred, dim=-1)
+              
+                pred_val = pred[:,1]
+                pred_val.backward(retain_graph=True)
 
+                grad = x.grad
+                grad = torch.sum(grad, -1).squeeze(0)
+                grad_abs = torch.abs(grad / (EPS + torch.norm(grad, dim=-1)))
+                grad_scale = 1 / (1 + torch.exp(-10 * (grad_abs - 0.5)))
                 if self.device == 'cpu':
                     predictions.extend(pred.detach().numpy())
+                    grads.append(grad_scale.detach().numpy())
                 else:
                     predictions.extend(pred.cpu().detach().numpy())
-            if return_grad:
-                model.train()
-                pred.backward(retain_graph=True)
-                grad = getattr(data.x, 'grad', None)
-                grad = torch.sum(grad, -1).unsqueeze(0)
-                grad_abs = torch.abs(grad / torch.norm(grad, dim=-1))
+                    grads.append(grad_scale.cpu().detach().numpy())
+            
+            else:
+                with torch.no_grad():
+                    data = data.to(self.device)
+                    _, pred = model(data)
+                    pred = F.softmax(pred, dim=-1)
 
-                if self.device == 'cpu':
-                    grads.append(grad_abs.detach().numpy())
-                else:
-                    grads.append(grad_abs.cpu().detach().numpy())
+                    if self.device == 'cpu':
+                        predictions.extend(pred.detach().numpy())
+                    else:
+                        predictions.extend(pred.cpu().detach().numpy())
 
         predictions = np.array(predictions)
-        grads = np.array(grads)
         if return_grad:
             return predictions[:,1], grads
         else:
-            return predictions[:,1]
+            return predictions[:,1], None
+        
+    def run_model(self, model, data):
+        x = data.x
+        edge_index = data.edge_index
+        edge_attr = data.edge_attr
+        
+        x1 = F.one_hot(x[:,0], num_classes=num_atom_type).float()
+        x2 = F.one_hot(x[:,1], num_classes=num_chirality_tag).float()
+        x = torch.cat([x1, x2], dim=-1)
+        x.requires_grad = True
+        h = x[:,:num_atom_type] @ model.x_embedding1.weight + \
+            x[:,num_atom_type:] @ model.x_embedding2.weight
+
+        for layer in range(model.num_layer):
+            h = model.gnns[layer](h, edge_index, edge_attr)
+            h = model.batch_norms[layer](h)
+            if layer == model.num_layer - 1:
+                h = F.dropout(h, model.drop_ratio, training=False)
+            else:
+                h = F.dropout(F.relu(h), model.drop_ratio, training=False)
+
+        h = model.pool(h, data.batch)
+        h = model.feat_lin(h)
+        
+        return x, model.pred_head(h)
