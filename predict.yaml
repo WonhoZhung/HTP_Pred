@@ -8,9 +8,10 @@ init_lr: 0.0005                 # initial learning rate for the prediction head
 init_base_lr: 0.0001            # initial learning rate for the base GNN encoder
 weight_decay: 1e-6              # weight decay of Adam
 gpu: cuda:0                     # training GPU
-model_path: ./finetune/Dec04_16-47-46_hepato_hepatotoxicity/checkpoints/model.pth                    # path to model pth
-return_grad: False
+model_path: ./finetune/checkpoints/model.pth                    # path to model pth
+grad: False
 
+model_type: gin                 # GNN backbone (i.e., gin/gcn)
 model: 
   num_layer: 5                  # number of graph conv layers
   emb_dim: 300                  # embedding dimension in graph conv layers
@@ -20,4 +21,4 @@ model:
 
 dataset:
   num_workers: 4                # dataloader number of workers
-  data_path: ./sample.csv       # path to data csv
+  data_path: ./example/sample.csv       # path to data csv

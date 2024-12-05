@@ -6,17 +6,46 @@ import numpy as np
 import pandas as pd
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
-from MolCLR.finetune import FineTune, Normalizer
 from sklearn.metrics import roc_auc_score, mean_squared_error, mean_absolute_error
 from sklearn.model_selection import StratifiedKFold
 
 
-class HTPFineTune(FineTune):
+def _save_config_file(model_checkpoints_folder):
+    if not os.path.exists(model_checkpoints_folder):
+        os.makedirs(model_checkpoints_folder)
+        shutil.copy('./config_finetune.yaml', os.path.join(model_checkpoints_folder, 'config_finetune.yaml'))
+
+
+class HTPFineTune(object):
 
     def __init__(self, dataset, config):
-        super().__init__(self, dataset, config)
+        self.config = config
+        self.device = self._get_device()
+
+        #current_time = datetime.now().strftime('%b%d_%H-%M-%S')
+        #dir_name = current_time + '_' + config['task_name'] + '_' + config['dataset']['target']
+        #log_dir = os.path.join('finetune', dir_name)
+        self.dataset = dataset
+        self.criterion = nn.CrossEntropyLoss()
+
+    def _get_device(self):
+        if torch.cuda.is_available() and self.config['gpu'] != 'cpu':
+            device = self.config['gpu']
+            torch.cuda.set_device(device)
+        else:
+            device = 'cpu'
+        print("Running on:", device)
+
+        return device
+
+    def _step(self, model, data, n_iter):
+        # get the prediction
+        __, pred = model(data)  # [N,C]
+        loss = self.criterion(pred, data.y.flatten())
+        return loss
 
     def train_kfold(self, k_folds):
         skf = StratifiedKFold(n_splits=k_folds, shuffle=True, random_state=42)
@@ -27,16 +56,7 @@ class HTPFineTune(FineTune):
             print("-------------")
 
             train_loader = self.dataset.get_data_loader_with_indices(train_idx)
-            test_loader = self.dataset.get_data_loader_with_indices(test_idx)
-
-            self.normalizer = None
-            if self.config["task_name"] in ['qm7', 'qm9']:
-                labels = []
-                for d, __ in train_loader:
-                    labels.append(d.y)
-                labels = torch.cat(labels)
-                self.normalizer = Normalizer(labels)
-                print(self.normalizer.mean, self.normalizer.std, labels.shape)
+            test_loader = self.dataset.get_data_loader_with_indices(test_idx)        
 
             if self.config['model_type'] == 'gin':
                 from MolCLR.models.ginet_finetune import GINet
@@ -61,15 +81,10 @@ class HTPFineTune(FineTune):
                 self.config['init_lr'], weight_decay=eval(self.config['weight_decay'])
             )
 
-            if apex_support and self.config['fp16_precision']:
-                model, optimizer = amp.initialize(
-                    model, optimizer, opt_level='O2', keep_batchnorm_fp32=True
-                )
-
             model_checkpoints_folder = os.path.join(self.writer.log_dir, 'checkpoints')
 
             # save config file
-            #_save_config_file(model_checkpoints_folder)
+            _save_config_file(model_checkpoints_folder)
 
             n_iter = 0
 
@@ -78,22 +93,13 @@ class HTPFineTune(FineTune):
                     optimizer.zero_grad()
 
                     data = data.to(self.device)
-                    loss = self._step(model, data, n_iter)
+                    loss = self._step(model, data, n_iter)                      
 
-                    #if n_iter % self.config['log_every_n_steps'] == 0:
-                    #    self.writer.add_scalar('train_loss', loss, global_step=n_iter)
-                    #    print(epoch_counter, bn, loss.item())                        
-
-                    if apex_support and self.config['fp16_precision']:
-                        with amp.scale_loss(loss, optimizer) as scaled_loss:
-                            scaled_loss.backward()
-                    else:
-                        loss.backward()
+                    loss.backward()
 
                     optimizer.step()
                     n_iter += 1
 
-                self.writer.add_scalar('train_loss', loss)
                 print(epoch_counter, loss.item())
 
             torch.save(model.state_dict(), os.path.join(model_checkpoints_folder, f'model_{fold+1}.pth'))
@@ -124,11 +130,7 @@ class HTPFineTune(FineTune):
                 test_loss += loss.item() * data.y.size(0)
                 num_data += data.y.size(0)
 
-                if self.normalizer:
-                    pred = self.normalizer.denorm(pred)
-
-                if self.config['dataset']['task'] == 'classification':
-                    pred = F.softmax(pred, dim=-1)
+                pred = F.softmax(pred, dim=-1)
 
                 if self.device == 'cpu':
                     predictions.extend(pred.detach().numpy())
@@ -146,8 +148,55 @@ class HTPFineTune(FineTune):
         self.roc_auc = roc_auc_score(labels, predictions[:,1])
         print('Test loss:', test_loss, 'Test ROC AUC:', self.roc_auc)
 
-    def htp_pred(self, model, test_loader, return_grad=False):
-        model_path = os.path.join(self.writer.log_dir, 'checkpoints', 'model.pth')
+    def _load_pre_trained_weights(self, model):
+        try:
+            checkpoints_folder = os.path.join('./ckpt', self.config['fine_tune_from'], 'checkpoints')
+            state_dict = torch.load(os.path.join(checkpoints_folder, 'model.pth'), map_location=self.device)
+            # model.load_state_dict(state_dict)
+            model.load_my_state_dict(state_dict)
+            print("Loaded pre-trained model with success.")
+        except FileNotFoundError:
+            print("Pre-trained weights not found. Training from scratch.")
+
+        return model
+
+    def _validate(self, model, valid_loader):
+        predictions = []
+        labels = []
+        with torch.no_grad():
+            model.eval()
+
+            valid_loss = 0.0
+            num_data = 0
+            for bn, data in enumerate(valid_loader):
+                data = data.to(self.device)
+
+                __, pred = model(data)
+                loss = self._step(model, data, bn)
+
+                valid_loss += loss.item() * data.y.size(0)
+                num_data += data.y.size(0)
+
+                pred = F.softmax(pred, dim=-1)
+
+                if self.device == 'cpu':
+                    predictions.extend(pred.detach().numpy())
+                    labels.extend(data.y.flatten().numpy())
+                else:
+                    predictions.extend(pred.cpu().detach().numpy())
+                    labels.extend(data.y.cpu().flatten().numpy())
+
+            valid_loss /= num_data
+        
+        model.train()
+
+        predictions = np.array(predictions)
+        labels = np.array(labels)
+        roc_auc = roc_auc_score(labels, predictions[:,1])
+        print('Validation loss:', valid_loss, 'ROC AUC:', roc_auc)
+        return valid_loss, roc_auc
+
+    def htp_pred(self, model, model_path, test_loader, return_grad=False):
         state_dict = torch.load(model_path, map_location=self.device)
         model.load_state_dict(state_dict)
         print("Loaded trained model with success.")
@@ -163,11 +212,7 @@ class HTPFineTune(FineTune):
 
                 num_data += data.y.size(0)
 
-                if self.normalizer:
-                    pred = self.normalizer.denorm(pred)
-
-                if self.config['dataset']['task'] == 'classification':
-                    pred = F.softmax(pred, dim=-1)
+                pred = F.softmax(pred, dim=-1)
 
                 if self.device == 'cpu':
                     predictions.extend(pred.detach().numpy())
@@ -184,7 +229,10 @@ class HTPFineTune(FineTune):
                     grads.append(grad_abs.detach().numpy())
                 else:
                     grads.append(grad_abs.cpu().detach().numpy())
+
+        predictions = np.array(predictions)
+        grads = np.array(grads)
         if return_grad:
-            return predictions, np.array(grads)
+            return predictions[:,1], grads
         else:
-            return predictions
+            return predictions[:,1]
