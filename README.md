@@ -6,7 +6,7 @@ This is the official implementation of HTP_Pred.
 
 ### Installation
 
-Set up conda environment and clone the github repo
+Set up conda environment and clone MolCLR github repository
 
 ```
 # create a new environment
@@ -23,3 +23,15 @@ $ conda install -c conda-forge tensorboard
 # clone the source code of MolCLR github
 $ git clone https://github.com/yuyangw/MolCLR.git
 ```
+
+### Predicting hepatotoxicity
+
+To predict hepatotoxicity with compound SMILES, first prepare the .csv file as like an example in `example/sample.csv`.
+The configurations and detailed explanation for each variable can be found in `predict.yaml`.
+```
+$ python pred_htp.py predict.yaml
+```
+
+### Visualizing atomwise contribution
+
+TBD
