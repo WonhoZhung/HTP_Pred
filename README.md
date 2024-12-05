@@ -42,7 +42,9 @@ Change `grad` variable to `True` to calculate atom contribution.
 This will save scaled gradient values as pickle file.
 
 Change `visualize` variable to `True` to visualize atom contribution.
-This will make images of molecules.
+This will make images of molecules with colors indicating the contribution.
+
+<img src="src/grad.png" width="400">
 
 
 ## Citation
