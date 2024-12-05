@@ -1,6 +1,8 @@
 ## HTP_Pred ##
 
-This is the official implementation of HTP_Pred.
+This is the official implementation of HTP_Pred, a deep learning model for predicting hepatotoxicity trained on HTP_KB database.
+
+You can access to the database and run the model prediction on the [HepatoToxicity Portal(HTP)](https://kobic.re.kr/htp/).
 
 ## Getting Started
 
