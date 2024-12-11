@@ -217,9 +217,9 @@ class HTPFineTune(object):
                 pred_val.backward(retain_graph=True)
 
                 grad = x.grad
-                grad = torch.sum(grad, -1).squeeze(0)
-                grad_abs = torch.abs(grad / (EPS + torch.norm(grad, dim=-1)))
-                grad_scale = 1 / (1 + torch.exp(-10 * (grad_abs - 0.5)))
+                grad_abs = torch.sum(torch.abs(grad), -1).squeeze(0)
+                grad_scale = grad_abs / (EPS + torch.norm(grad_abs, dim=-1))
+                #grad_scale = 1 / (1 + torch.exp(-10 * (grad_scale - 0.5)))
                 if self.device == 'cpu':
                     predictions.extend(pred.detach().numpy())
                     grads.append(grad_scale.detach().numpy())
