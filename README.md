@@ -1,5 +1,7 @@
 ## HTP_Pred ##
 
+🎉Our work is accepted in the Journal of Cheminformatics and can be found in this [link](https://jcheminf.biomedcentral.com/articles/10.1186/s13321-025-00992-8).
+
 This is the official implementation of HTP_Pred, a deep learning model for predicting hepatotoxicity, trained on HTP_KB database.
 
 <img src="src/overview_htp.png" width="600">
@@ -52,5 +54,14 @@ This will make images of molecules with colors indicating the contribution.
 If you find our work useful in your research, please cite:
 
 ```
-TBD
+@article{han2025hepatotoxicity,
+  title={HepatoToxicity Portal (HTP): an integrated database of drug-induced hepatotoxicity knowledgebase and graph neural network-based prediction model},
+  author={Han, Jiyeon and Zhung, Wonho and Jang, Insoo and Lee, Joongwon and Kang, Min Ji and Lee, Timothy Dain and Kwack, Seung Jun and Kim, Kyu-Bong and Hwang, Daehee and Lee, Byungwook and others},
+  journal={Journal of Cheminformatics},
+  volume={17},
+  number={1},
+  pages={1--14},
+  year={2025},
+  publisher={BioMed Central}
+}
 ```
